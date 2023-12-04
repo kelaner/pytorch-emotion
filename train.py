@@ -8,20 +8,21 @@ import torch.optim as optim
 # 使用tensorboardX进行可视化
 from tensorboardX import SummaryWriter
 from torch.optim import lr_scheduler
+from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from net import simpleconv3
+from net import SimpleConvThree
 
 writer = SummaryWriter('logs')  # 创建一个SummaryWriter的示例，默认目录名字为runs
 
 
+# 训练主函数
 # 训练主函数
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         for phase in ['train', 'val']:
             if phase == 'train':
-                scheduler.step()
                 model.train(True)  # 设置为训练模式
             else:
                 model.train(False)  # 设置为验证模式
@@ -44,6 +45,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 if phase == 'train':
                     loss.backward()  # 误差反向传播
                     optimizer.step()  # 参数更新
+                    scheduler.step()  # 更新学习率，这一行被移到了这里
 
                 running_loss += loss.data.item()
                 running_accs += torch.sum(preds == labels).item()
@@ -73,7 +75,7 @@ if __name__ == '__main__':
     image_size = 64  # 图像统一缩放大小
     crop_size = 48  # 图像裁剪大小，即训练输入大小
     nclass = 4  # 分类类别数
-    model = simpleconv3(nclass)  # 创建模型
+    model = SimpleConvThree(nclass)  # 创建模型
     data_dir = './data'  # 数据目录
 
     # 模型缓存接口
@@ -89,13 +91,13 @@ if __name__ == '__main__':
     # 创建数据预处理函数，训练预处理包括随机裁剪缩放、随机翻转、归一化，验证预处理包括中心裁剪，归一化
     data_transforms = {
         'train': transforms.Compose([
-            transforms.RandomSizedCrop(48),
+            transforms.RandomResizedCrop(48),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         ]),
         'val': transforms.Compose([
-            transforms.Scale(image_size),
+            transforms.Resize(image_size),
             transforms.CenterCrop(crop_size),
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
@@ -107,10 +109,10 @@ if __name__ == '__main__':
                                               data_transforms[x]) for x in ['train', 'val']}
 
     # 创建数据指针，设置batch大小，shuffle，多进程数量
-    dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x],
-                                                  batch_size=64,
-                                                  shuffle=True,
-                                                  num_workers=4) for x in ['train', 'val']}
+    dataloaders = {x: DataLoader(image_datasets[x],
+                                 batch_size=64,
+                                 shuffle=True,
+                                 num_workers=4) for x in ['train', 'val']}
     # 获得数据集大小
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
 
@@ -125,4 +127,4 @@ if __name__ == '__main__':
                         scheduler=step_lr_scheduler,
                         num_epochs=300)
 
-    torch.save(model.state_dict(), 'models/model.pt')
+    torch.save(model.state_dict(), 'models/model1.pt')

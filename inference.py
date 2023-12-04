@@ -1,5 +1,5 @@
 import os
-import sys
+
 import cv2
 import dlib
 import numpy as np
@@ -21,18 +21,17 @@ def get_landmarks(im):
 
 
 # 全局变量
-# sys.argv[1] 权重文件
-# sys.argv[2] 图像文件夹
+modelpath = "models/model.pt"  # 权重文件路径
+image_folder_path = "testimages"  # 图像文件夹路径
 
 testsize = 48  # 测试图大小
-from net import simpleconv3
+from net import SimpleConvThree
 
-net = simpleconv3(4)  # 定义模型
+net = SimpleConvThree(4)  # 定义模型
 net.eval()  # 设置推理模式，使得dropout和batchnorm等网络层在train和val模式间切换
 torch.no_grad()  # 停止autograd模块的工作，以起到加速和节省显存
 
 # 载入模型权重
-modelpath = sys.argv[1]
 net.load_state_dict(torch.load(modelpath, map_location=lambda storage, loc: storage))
 
 # 定义预处理函数
@@ -41,16 +40,22 @@ data_transforms = transforms.Compose([
     transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
 
 # 一次测试一个文件
-imagepaths = os.listdir(sys.argv[2])
+imagepaths = os.listdir(image_folder_path)
 for imagepath in imagepaths:
-    im = cv2.imread(os.path.join(sys.argv[2], imagepath), 1)
+    im = cv2.imread(os.path.join(image_folder_path, imagepath), 1)
     try:
         rects = cascade.detectMultiScale(im, 1.3, 5)
+        if len(rects) == 0:  # 检查是否检测到人脸
+            raise ValueError("No faces detected")
         x, y, w, h = rects[0]
         rect = dlib.rectangle(x, y, x + w, y + h)
         landmarks = np.matrix([[p.x, p.y] for p in predictor(im, rect).parts()])
-    except:
-        continue  # 没有检测到人脸
+    except ValueError as e:
+        print(f"ValueError: {e}")  # 打印错误信息
+        continue
+    except Exception as e:
+        print(f"An exception occurred: {e}")  # 打印其他异常信息
+        continue
 
     xmin = 10000
     xmax = 0
@@ -105,11 +110,11 @@ for imagepath in imagepaths:
     roiresized = cv2.resize(roi, (testsize, testsize))
     imgblob = data_transforms(roiresized).unsqueeze(0)
     imgblob.requires_grad = False
-    predict = F.softmax(net(imgblob))
+    predict = F.softmax(net(imgblob), dim=1)
     print(predict)
     index = np.argmax(predict.detach().numpy())
 
-    im_show = cv2.imread(os.path.join(sys.argv[2], imagepath), 1)
+    im_show = cv2.imread(os.path.join(image_folder_path, imagepath), 1)
     im_h, im_w, im_c = im_show.shape
     pos_x = int(newx + dstlen)
     pos_y = int(newy + dstlen)

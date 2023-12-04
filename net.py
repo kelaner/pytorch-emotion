@@ -1,13 +1,14 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 # 3层卷积神经网络simpleconv3定义
 # 包括3个卷积层，3个BN层，3个ReLU激活层，3个全连接层
 
-class simpleconv3(nn.Module):
+class SimpleConvThree(nn.Module):
     # 初始化函数
     def __init__(self, nclass):
-        super(simpleconv3, self).__init__()
+        super(SimpleConvThree, self).__init__()
         self.conv1 = nn.Conv2d(3, 12, 3, 2)  # 输入图片大小为3*48*48，输出特征图大小为12*23*23，卷积核大小为3*3，步长为2
         self.bn1 = nn.BatchNorm2d(12)
         self.conv2 = nn.Conv2d(12, 24, 3, 2)  # 输入图片大小为12*23*23，输出特征图大小为24*11*11，卷积核大小为3*3，步长为2
@@ -36,6 +37,6 @@ if __name__ == '__main__':
     import torch
 
     x = torch.randn(1, 3, 48, 48)
-    model = simpleconv3(4)
+    model = SimpleConvThree(4)
     y = model(x)
     print(model)
