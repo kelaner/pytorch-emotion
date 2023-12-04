@@ -5,57 +5,55 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-# 使用tensorboardX进行可视化
-from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter  # 引入tensorboardX进行训练过程的可视化
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from net import SimpleConvThree
+from net import ThreeConvNet  # 假定net.py文件中定义了ThreeConvNet网络结构
 
-writer = SummaryWriter('logs')  # 创建一个SummaryWriter的示例，默认目录名字为runs
+writer = SummaryWriter('logs')  # 创建一个SummaryWriter实例，用于向tensorboard写入数据
 
 
-# 训练主函数
 # 训练主函数
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
-    for epoch in range(num_epochs):
+    for epoch in range(num_epochs):  # 迭代训练的轮数
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-        for phase in ['train', 'val']:
+        for phase in ['train', 'val']:  # 对训练集和验证集分别进行操作
             if phase == 'train':
-                model.train(True)  # 设置为训练模式
+                model.train(True)  # 设置模型为训练模式
             else:
-                model.train(False)  # 设置为验证模式
+                model.train(False)  # 设置模型为评估模式
 
-            running_loss = 0.0  # 损失变量
-            running_accs = 0.0  # 精度变量
-            number_batch = 0
+            running_loss = 0.0  # 累积损失值
+            running_accs = 0.0  # 累积准确率
+            number_batch = 0  # 记录处理的批次数
 
-            # 从dataloaders中获得数据
+            # 遍历数据加载器中的数据
             for data in dataloaders[phase]:
-                inputs, labels = data
+                inputs, labels = data  # 获取输入数据和标签
                 if use_gpu:
-                    inputs = inputs.cuda()
+                    inputs = inputs.cuda()  # 如果使用GPU，则将数据转移到GPU上
                     labels = labels.cuda()
 
-                optimizer.zero_grad()  # 清空梯度
-                outputs = model(inputs)  # 前向运行
-                _, preds = torch.max(outputs.data, 1)  # 使用max()函数对输出值进行操作，得到预测值索引
+                optimizer.zero_grad()  # 梯度归零
+                outputs = model(inputs)  # 前向传播得到输出
+                _, preds = torch.max(outputs.data, 1)  # 得到预测结果
                 loss = criterion(outputs, labels)  # 计算损失
                 if phase == 'train':
-                    loss.backward()  # 误差反向传播
-                    optimizer.step()  # 参数更新
-                    scheduler.step()  # 更新学习率，这一行被移到了这里
+                    loss.backward()  # 反向传播
+                    optimizer.step()  # 更新权重
+                    scheduler.step()  # 更新学习率
 
-                running_loss += loss.data.item()
-                running_accs += torch.sum(preds == labels).item()
-                number_batch += 1
+                running_loss += loss.data.item()  # 累加损失
+                running_accs += torch.sum(preds == labels).item()  # 累加正确预测的数量
+                number_batch += 1  # 批次数加一
 
-            # 得到每一个epoch的平均损失与精度
+            # 计算平均损失和准确率
             epoch_loss = running_loss / number_batch
             epoch_acc = running_accs / dataset_sizes[phase]
 
-            # 收集精度和损失用于可视化
+            # 使用tensorboard记录训练集和验证集的损失和准确率
             if phase == 'train':
                 writer.add_scalar('data/trainloss', epoch_loss, epoch)
                 writer.add_scalar('data/trainacc', epoch_acc, epoch)
@@ -66,65 +64,66 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
 
-    writer.close()
-    return model
+    writer.close()  # 关闭SummaryWriter
+    return model  # 返回训练好的模型
 
 
 if __name__ == '__main__':
+    image_size = 64  # 图像缩放大小
+    crop_size = 48  # 图像裁剪大小，即网络输入大小
+    nclass = 4  # 分类类别数量
+    model = ThreeConvNet(nclass)  # 实例化模型
+    data_dir = './data'  # 数据存放目录
 
-    image_size = 64  # 图像统一缩放大小
-    crop_size = 48  # 图像裁剪大小，即训练输入大小
-    nclass = 4  # 分类类别数
-    model = SimpleConvThree(nclass)  # 创建模型
-    data_dir = './data'  # 数据目录
-
-    # 模型缓存接口
+    # 如果不存在模型保存目录则创建之
     if not os.path.exists('models'):
         os.mkdir('models')
 
-    # 检查GPU是否可用，如果是使用GPU，否使用CPU
+    # 判断是否有可用的GPU，如果有则使用，否则使用CPU
     use_gpu = torch.cuda.is_available()
     if use_gpu:
-        model = model.cuda()
-    print(model)
+        model = model.cuda()  # 将模型转移到GPU上
 
-    # 创建数据预处理函数，训练预处理包括随机裁剪缩放、随机翻转、归一化，验证预处理包括中心裁剪，归一化
+    # 数据预处理步骤
     data_transforms = {
         'train': transforms.Compose([
-            transforms.RandomResizedCrop(48),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            transforms.RandomResizedCrop(crop_size),  # 随机裁剪到固定大小
+            transforms.RandomHorizontalFlip(),  # 随机水平翻转
+            transforms.ToTensor(),  # 转换为Tensor
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # 归一化处理
         ]),
         'val': transforms.Compose([
-            transforms.Resize(image_size),
-            transforms.CenterCrop(crop_size),
+            transforms.Resize(image_size),  # 缩放图片
+            transforms.CenterCrop(crop_size),  # 中心裁剪
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         ]),
     }
 
-    # 使用torchvision的dataset ImageFolder接口读取数据
+    # 使用ImageFolder读取图片，并应用预处理
     image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                               data_transforms[x]) for x in ['train', 'val']}
 
-    # 创建数据指针，设置batch大小，shuffle，多进程数量
+    # 创建DataLoader加载数据
     dataloaders = {x: DataLoader(image_datasets[x],
-                                 batch_size=64,
-                                 shuffle=True,
-                                 num_workers=4) for x in ['train', 'val']}
-    # 获得数据集大小
+                                 batch_size=64,  # 批次大小
+                                 shuffle=True,  # 是否打乱顺序
+                                 num_workers=4)  # 多进程加载的进程数
+                   for x in ['train', 'val']}
+    # 获取各部分数据集的大小
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
 
-    # 优化目标使用交叉熵，优化方法使用带动量项的SGD，学习率迭代策略为step，每隔100个epoch，变为原来的0.1倍
-    criterion = nn.CrossEntropyLoss()
-    optimizer_ft = optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
-    step_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=100, gamma=0.1)
+    # 定义损失函数、优化器以及学习率调度器
+    criterion = nn.CrossEntropyLoss()  # 使用交叉熵损失
+    optimizer_ft = optim.SGD(model.parameters(), lr=0.1, momentum=0.9)  # 使用带动量的SGD优化器
+    step_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=100, gamma=0.1)  # 学习率每100个epoch衰减为原来的0.1倍
 
+    # 开始训练模型，这里设置为300个epoch
     model = train_model(model=model,
                         criterion=criterion,
                         optimizer=optimizer_ft,
                         scheduler=step_lr_scheduler,
                         num_epochs=300)
 
-    torch.save(model.state_dict(), 'models/model1.pt')
+    # 训练完成后保存模型参数
+    torch.save(model.state_dict(), 'models/model.pt')
