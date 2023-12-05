@@ -5,14 +5,14 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from tensorboardX import SummaryWriter  # 引入tensorboardX进行训练过程的可视化
+from tensorboardX import SummaryWriter
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from net import ThreeConvNet  # 假定net.py文件中定义了ThreeConvNet网络结构
+from net import ThreeConvNet  # net.py文件中定义了ThreeConvNet网络结构
 
-writer = SummaryWriter('logs')  # 创建一个SummaryWriter实例，用于向tensorboard写入数据
+writer = SummaryWriter('logs')
 
 
 # 训练主函数
@@ -82,15 +82,15 @@ if __name__ == '__main__':
     # 判断是否有可用的GPU，如果有则使用，否则使用CPU
     use_gpu = torch.cuda.is_available()
     if use_gpu:
-        model = model.cuda()  # 将模型转移到GPU上
+        model = model.cuda()  # 将模型转移到GPU上，这可以显著加快模型的训练速度
 
     # 数据预处理步骤
     data_transforms = {
         'train': transforms.Compose([
-            transforms.RandomResizedCrop(crop_size),  # 随机裁剪到固定大小
-            transforms.RandomHorizontalFlip(),  # 随机水平翻转
+            transforms.RandomResizedCrop(crop_size),  # 随机裁剪到固定大小，增加模型训练时看到的图像多样性
+            transforms.RandomHorizontalFlip(),  # 随机水平翻转，进一步增加数据多样性
             transforms.ToTensor(),  # 转换为Tensor
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # 归一化处理
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # 归一化处理，加快模型训练的收敛速度
         ]),
         'val': transforms.Compose([
             transforms.Resize(image_size),  # 缩放图片
@@ -107,16 +107,17 @@ if __name__ == '__main__':
     # 创建DataLoader加载数据
     dataloaders = {x: DataLoader(image_datasets[x],
                                  batch_size=64,  # 批次大小
-                                 shuffle=True,  # 是否打乱顺序
-                                 num_workers=4)  # 多进程加载的进程数
+                                 shuffle=True,  # 是否打乱顺序，有助于减少模型对数据顺序的依赖
+                                 num_workers=4)  # 多进程加载的进程数，提高数据加载效率
                    for x in ['train', 'val']}
     # 获取各部分数据集的大小
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
 
     # 定义损失函数、优化器以及学习率调度器
     criterion = nn.CrossEntropyLoss()  # 使用交叉熵损失
-    optimizer_ft = optim.SGD(model.parameters(), lr=0.1, momentum=0.9)  # 使用带动量的SGD优化器
-    step_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=100, gamma=0.1)  # 学习率每100个epoch衰减为原来的0.1倍
+    optimizer_ft = optim.SGD(model.parameters(), lr=0.1, momentum=0.9)  # 使用带动量的SGD优化器，动量可以帮助加速 SGD 在相关方向上的优化
+    step_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=100,
+                                            gamma=0.1)  # 学习率每100个epoch衰减为原来的0.1倍，有助于模型在损失平台期找到更深的局部最小值
 
     # 开始训练模型，这里设置为300个epoch
     model = train_model(model=model,
